@@ -2,7 +2,7 @@ Git_JakartaEE_RRV
 
     NetBeans:     25
     PostgreSQL:   17
-    GlassFish:    7.0.0 
+    GlassFish:    7.0.21 
     JDK:          21
 
 
