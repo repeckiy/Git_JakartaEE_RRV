@@ -54,8 +54,6 @@ public void deleteLot(String lotId, String executorId) {
         em.createQuery("DELETE FROM Bid b WHERE b.lot.id = :lotId")
           .setParameter("lotId", lotId)
           .executeUpdate();
-
-        // Ось тут виправлено — native SQL:
         em.createNativeQuery("DELETE FROM user_bid_lots WHERE lot_id = ?1")
           .setParameter(1, lotId)
           .executeUpdate();
@@ -109,8 +107,5 @@ public void deleteLot(String lotId, String executorId) {
     private boolean isOwner(User user, Lot lot) {
         return user != null && lot.getOwner().getId().equals(user.getId());
     }
-
-    // ========== Додаткові методи під ставки (можеш винести у BidService) ==========
-    // public void placeBid(...) { ... }
 
 }
