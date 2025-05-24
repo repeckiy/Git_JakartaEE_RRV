@@ -12,22 +12,96 @@ import jakarta.transaction.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+/**
+ * Створює схему, очищає таблиці й сідає тестові дані.
+ *
+ * ▸ Якщо таблиць немає – createSchema() їх створить.
+ * ▸ Якщо таблиці вже є – вони просто очищаються TRUNCATE-ом.
+ */
 @Singleton
 @Startup
 public class DataSeeder {
+
     @PersistenceContext(unitName = "auctionPU")
     private EntityManager em;
 
     @PostConstruct
     @Transactional
     public void seed() {
-        // Очищаємо таблиці у правильному порядку (щоб не порушити зовнішні ключі)
-        em.createNativeQuery("DELETE FROM user_bid_lots").executeUpdate();
-        em.createNativeQuery("DELETE FROM bids").executeUpdate();
-        em.createNativeQuery("DELETE FROM lots").executeUpdate();
-        em.createNativeQuery("DELETE FROM users").executeUpdate();
+        /* 1. гарантуємо, що схему створено */
+        createSchema();
 
-        // Створюємо тестових користувачів
+        /* 2. очищаємо таблиці (якщо вони щойно створені – буде миттєво) */
+        clearTables();
+
+        /* 3. додаємо мінімальний набір тестових даних */
+        insertSampleData();
+    }
+
+    /* ------------------------------------------------------------------ */
+
+    /** CREATE TABLE … IF NOT EXISTS – безпечний при повторних запусках */
+    private void createSchema() {
+
+        // users ---------------------------------------------------------
+        em.createNativeQuery("""
+            CREATE TABLE IF NOT EXISTS users (
+                id        VARCHAR(64)  PRIMARY KEY,
+                username  VARCHAR(128) NOT NULL UNIQUE,
+                email     VARCHAR(256) NOT NULL,
+                password  VARCHAR(256) NOT NULL,
+                role      VARCHAR(32)  NOT NULL
+            )""").executeUpdate();
+
+        // lots ----------------------------------------------------------
+        em.createNativeQuery("""
+            CREATE TABLE IF NOT EXISTS lots (
+                id            VARCHAR(64)  PRIMARY KEY,
+                title         VARCHAR(256) NOT NULL,
+                description   TEXT,
+                startprice    NUMERIC(12,2) NOT NULL,
+                currentprice  NUMERIC(12,2) NOT NULL,
+                owner_id      VARCHAR(64)  REFERENCES users(id),
+                createdat     TIMESTAMP,
+                startedat     TIMESTAMP,
+                endedat       TIMESTAMP,
+                active        BOOLEAN
+            )""").executeUpdate();
+
+        // bids ----------------------------------------------------------
+        em.createNativeQuery("""
+            CREATE TABLE IF NOT EXISTS bids (
+                id         VARCHAR(64)  PRIMARY KEY,
+                user_id    VARCHAR(64)  REFERENCES users(id),
+                lot_id     VARCHAR(64)  REFERENCES lots(id),
+                amount     NUMERIC(12,2) NOT NULL,
+                createdat  TIMESTAMP
+            )""").executeUpdate();
+
+        // user_bid_lots -------------------------------------------------
+        em.createNativeQuery("""
+            CREATE TABLE IF NOT EXISTS user_bid_lots (
+                user_id VARCHAR(64) REFERENCES users(id),
+                lot_id  VARCHAR(64) REFERENCES lots(id),
+                PRIMARY KEY (user_id, lot_id)
+            )""").executeUpdate();
+    }
+
+    /** Очищення всіх таблиць одним TRUNCATE (швидко й без FK-помилок) */
+    private void clearTables() {
+        em.createNativeQuery("""
+            TRUNCATE TABLE user_bid_lots,
+                           bids,
+                           lots,
+                           users
+            RESTART IDENTITY CASCADE
+        """).executeUpdate();
+    }
+
+    /** Мінімальний тестовий набір */
+    private void insertSampleData() {
+
+        /* ––– admin ––– */
         User admin = new User();
         setId(admin, "ad33f267-8dd6-4711-8b82-222222222222");
         admin.setUsername("admin");
@@ -35,57 +109,41 @@ public class DataSeeder {
         admin.setPassword("Kiev_2025");
         admin.setRole("Administrator");
         em.persist(admin);
-//
-//        User user = new User();
-//        setId(user, "ed76a098-fb1c-43ce-83b8-111111111111");
-//        user.setUsername("rrv");
-//        user.setEmail("rrv@example.com");
-//        user.setPassword("Kiev_2025");
-//        user.setRole("User");
-//        em.persist(user);
-//
-//        // Створюємо тестові лоти
-//        Lot lot1 = new Lot();
-//        setId(lot1, "e0a1fd71-7e2d-42f7-b337-555555555555");
-//        lot1.setTitle("123");
-//        lot1.setDescription("122");
-//        lot1.setStartPrice(new BigDecimal("2000.00"));
-//        lot1.setCurrentPrice(new BigDecimal("2000.00"));
-//        lot1.setCreatedAt(LocalDateTime.now());
-//        lot1.setOwner(admin);
-//        em.persist(lot1);
-//
-//        Lot lot2 = new Lot();
-//        setId(lot2, "f4e1cdb6-79d2-4d54-b0f6-666666666666");
-//        lot2.setTitle("wer");
-//        lot2.setDescription("qwre");
-//        lot2.setStartPrice(new BigDecimal("1110.00"));
-//        lot2.setCurrentPrice(new BigDecimal("1110.00"));
-//        lot2.setCreatedAt(LocalDateTime.now());
-//        lot2.setOwner(admin);
-//        em.persist(lot2);
-//
-//        Lot lot3 = new Lot();
-//        setId(lot3, "97f6e85d-9a8b-4b68-b6e1-777777777777");
-//        lot3.setTitle("knopa");
-//        lot3.setDescription("popa");
-//        lot3.setStartPrice(new BigDecimal("100.00"));
-//        lot3.setCurrentPrice(new BigDecimal("100.00"));
-//        lot3.setCreatedAt(LocalDateTime.now());
-//        lot3.setOwner(user);
-//        em.persist(lot3);
-//
-//        // Аналогічно можна додати bids та інші дані
+
+        /* ––– звичайний користувач ––– */
+        User harry = new User();
+        setId(harry, "fd372128-bc5f-4bf2-840a-2a89a04be0e5");
+        harry.setUsername("Harry");
+        harry.setEmail("harry@example.com");
+        harry.setPassword("1");
+        harry.setRole("User");
+        em.persist(harry);
+
+        /* ––– приклад лоту ––– */
+        Lot lot = new Lot();
+        setId(lot, "34863da1-9bb3-4c45-bd38-c3a8318d7cef");
+        lot.setTitle("First test lot");
+        lot.setDescription("This is a seeded lot created by DataSeeder.");
+        lot.setStartPrice(new BigDecimal("123.00"));
+        lot.setCurrentPrice(new BigDecimal("123.00"));
+        lot.setCreatedAt(LocalDateTime.now());
+        lot.setOwner(harry);       // власник – Harry
+        lot.setActive(true);
+        em.persist(lot);
+
+        // двосторонній зв’язок
+        harry.getOwnedLots().add(lot);
     }
 
-    // Метод для встановлення id через рефлексію
-    private void setId(Object obj, String idValue) {
+    /* -------------------------------------------------------------- */
+    /** Через рефлексію проставляємо статичний UUID (зручно для тестів) */
+    private void setId(Object entity, String idValue) {
         try {
-            var field = obj.getClass().getDeclaredField("id");
-            field.setAccessible(true);
-            field.set(obj, idValue);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new RuntimeException("Cannot set field 'id' on object", e);
+            var f = entity.getClass().getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(entity, idValue);
+        } catch (Exception ex) {
+            throw new IllegalStateException("Cannot set id via reflection", ex);
         }
     }
 }
