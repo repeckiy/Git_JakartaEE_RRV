@@ -34,6 +34,9 @@
                         <div class="lot-info">
                             <span>Bids: ${lot.bids.size()}</span>
                         </div>
+                        <div class="lot-info">
+                            <span>Owner: ${lot.owner.username}</span>
+                        </div>                                                
                         <a href="${pageContext.request.contextPath}/lot?id=${lot.id}" class="button blue wide">View Details</a>
                     </div>
                 </c:forEach>
